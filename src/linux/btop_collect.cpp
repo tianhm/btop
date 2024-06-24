@@ -158,9 +158,11 @@ namespace Gpu {
 
 	//? AMD data collection
 	namespace Rsmi {
+
+	//? RSMI defines, structs & typedefs
+	#define RSMI_DEVICE_NAME_BUFFER_SIZE 128
+
 	#if !defined(RSMI_STATIC)
-		//? RSMI defines, structs & typedefs
-        #define RSMI_DEVICE_NAME_BUFFER_SIZE 128
 		#define RSMI_MAX_NUM_FREQUENCIES_V5  32
 		#define RSMI_MAX_NUM_FREQUENCIES_V6  33
 		#define RSMI_STATUS_SUCCESS           0
@@ -446,7 +448,7 @@ namespace Cpu {
 						const int file_id = atoi(file.path().filename().c_str() + 4); // skip "temp" prefix
 						string file_path = file.path();
 
-						if (!s_contains(file_path, file_suffix)) {
+						if (!s_contains(file_path, file_suffix) or s_contains(file_path, "nvme")) {
 							continue;
 						}
 
@@ -725,7 +727,7 @@ namespace Cpu {
 						if (fs::exists(bat_dir / "power_now")) {
 							new_bat.power_now = bat_dir / "power_now";
 						}
-						else if ((fs::exists(bat_dir / "current_now")) and (fs::exists(bat_dir / "current_now"))) {
+						else if ((fs::exists(bat_dir / "current_now")) and (fs::exists(bat_dir / "voltage_now"))) {
 							 new_bat.current_now = bat_dir / "current_now";
 							 new_bat.voltage_now = bat_dir / "voltage_now";
 						}
@@ -1934,8 +1936,13 @@ namespace Mem {
 						disk.total = vfs.f_blocks * vfs.f_frsize;
 						disk.free = (free_priv ? vfs.f_bfree : vfs.f_bavail) * vfs.f_frsize;
 						disk.used = disk.total - disk.free;
-						disk.used_percent = round((double)disk.used * 100 / disk.total);
-						disk.free_percent = 100 - disk.used_percent;
+						if (disk.total != 0) {
+							disk.used_percent = round((double)disk.used * 100 / disk.total);
+							disk.free_percent = 100 - disk.used_percent;
+						} else {
+							disk.used_percent = 0;
+							disk.free_percent = 0;
+						}
 						return pair{disk, -1};
 					});
 					++it;
@@ -2797,18 +2804,13 @@ namespace Proc {
 			filter_found = 0;
 			for (auto& p : current_procs) {
 				if (not tree and not filter.empty()) {
-						if (not s_contains_ic(to_string(p.pid), filter)
-						and not s_contains_ic(p.name, filter)
-						and not s_contains_ic(p.cmd, filter)
-						and not s_contains_ic(p.user, filter)) {
-							p.filtered = true;
-							filter_found++;
-							}
-						else {
-							p.filtered = false;
-						}
+					if (!matches_filter(p, filter)) {
+						p.filtered = true;
+						filter_found++;
+					} else {
+						p.filtered = false;
 					}
-				else {
+				} else {
 					p.filtered = false;
 				}
 			}
